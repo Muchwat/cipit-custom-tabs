@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: CIPIT Custom Tabs
- * Plugin URI: https://github.com/Muchwat/custom-tabs-deep-linker
+ * Plugin URI: https://github.com/Muchwat/cipit-custom-tabs
  * Description: Implements a custom [custom_tabs] shortcode system with deep linking, dynamic content, layouts, search, and more.
  * Version: 1.0.0
  * Author: Kevin Muchwat
