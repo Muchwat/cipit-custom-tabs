@@ -40,16 +40,18 @@ This plugin is ideal for documentation, research content, multi-section pages, F
 4. Create a **Tab Group** and assign your Tab Items to it
 5. Render dynamic tabs using the shortcode:
 
+```bash
 [custom_tabs group="my-group" layout="left" title="My Tabs" description="This is my custom tab"]
+```
 
 
 ### Frequently Asked Questions
 
 #### How do I activate dynamic mode? 
 Create Tab Items and assign them to a Tab Group. Then use:
-
+```bash
 [custom_tabs group="group-slug"]
-
+```
 
 #### How do I set a custom deep linking ID? 
 Edit any Tab Item → right sidebar → “Custom Tab ID”.
