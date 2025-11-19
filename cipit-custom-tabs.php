@@ -9,19 +9,9 @@
  * Text Domain: cipit-custom-tabs
  */
 
-
-// Global variables for shortcode processing
 global $custom_tab_data;
 $custom_tab_data = array();
 
-
-// =========================================================================
-// 1. ADMIN PANEL SETUP: Custom Post Type and Taxonomy for Dynamic Tabs
-// =========================================================================
-
-/**
- * Register the Custom Post Type for individual Tab Items.
- */
 function ctdl_register_tab_cpt()
 {
     $labels = array(
@@ -39,9 +29,9 @@ function ctdl_register_tab_cpt()
         'label' => __('Tab Items', 'textdomain'),
         'description' => __('Content for custom tab sections.', 'textdomain'),
         'labels' => $labels,
-        'supports' => array('title', 'editor'), // Title is the tab title, Editor is the tab content
+        'supports' => array('title', 'editor'),
         'hierarchical' => false,
-        'public' => false, // Should not be directly accessible by URL
+        'public' => false,
         'show_ui' => true,
         'show_in_menu' => true,
         'menu_position' => 20,
@@ -58,9 +48,6 @@ function ctdl_register_tab_cpt()
 }
 add_action('init', 'ctdl_register_tab_cpt', 0);
 
-/**
- * Register the Custom Taxonomy for grouping Tab Items (e.g., "Research Group").
- */
 function ctdl_register_tab_taxonomy()
 {
     $labels = array(
@@ -70,7 +57,7 @@ function ctdl_register_tab_taxonomy()
     );
 
     $args = array(
-        'hierarchical' => true, // Make it work like categories
+        'hierarchical' => true,
         'labels' => $labels,
         'show_ui' => true,
         'show_admin_column' => true,
@@ -81,14 +68,6 @@ function ctdl_register_tab_taxonomy()
 }
 add_action('init', 'ctdl_register_tab_taxonomy', 0);
 
-
-// =========================================================================
-// 2. ADMIN CUSTOM FIELD LOGIC (Custom ID)
-// =========================================================================
-
-/**
- * Add a custom meta box for the Tab ID.
- */
 function ctdl_add_custom_id_meta_box()
 {
     add_meta_box(
@@ -96,24 +75,17 @@ function ctdl_add_custom_id_meta_box()
         __('Custom Tab ID', 'textdomain'),
         'ctdl_display_custom_id_meta_box',
         'tab_item',
-        'side', // Place on the side for visibility
+        'side',
         'high'
     );
 }
 add_action('add_meta_boxes', 'ctdl_add_custom_id_meta_box');
 
-/**
- * Display the custom ID meta box content.
- */
 function ctdl_display_custom_id_meta_box($post)
 {
-    // Add a nonce field so we can check it later for security
     wp_nonce_field('ctdl_save_custom_id_data', 'ctdl_custom_id_nonce');
 
-    // Get current ID value (custom field)
     $custom_id = get_post_meta($post->ID, '_ctdl_custom_tab_id', true);
-
-    // Fallback to post slug if custom ID is empty (for display only)
     $default_id = $post->post_name;
 
     echo '<label for="ctdl_custom_tab_id">' . esc_html__('Unique ID (for deep linking):', 'textdomain') . '</label>';
@@ -121,17 +93,12 @@ function ctdl_display_custom_id_meta_box($post)
     echo '<p class="description">' . esc_html__('This ID is used for deep linking (e.g., #your-id). If left blank, the ID will default to the post slug:', 'textdomain') . ' <code>' . esc_html($default_id) . '</code>.</p>';
 }
 
-/**
- * Save the custom ID when the post is saved.
- */
 function ctdl_save_custom_id_data($post_id)
 {
-    // Check if our nonce is set and verified.
     if (!isset($_POST['ctdl_custom_id_nonce']) || !wp_verify_nonce($_POST['ctdl_custom_id_nonce'], 'ctdl_save_custom_id_data')) {
         return $post_id;
     }
 
-    // Stop if autosave or no permission.
     if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) {
         return $post_id;
     }
@@ -139,14 +106,11 @@ function ctdl_save_custom_id_data($post_id)
         return $post_id;
     }
 
-    // Get the raw input ID
     $input_id = isset($_POST['ctdl_custom_tab_id']) ? trim($_POST['ctdl_custom_tab_id']) : '';
 
     if (!empty($input_id)) {
-        // Use a permissive regex to allow letters (upper/lower), numbers, hyphens, and underscores.
         $new_id = preg_replace('/[^a-zA-Z0-9_-]/', '', $input_id);
 
-        // Ensure the sanitized ID is not empty
         if (!empty($new_id)) {
             update_post_meta($post_id, '_ctdl_custom_tab_id', $new_id);
         } else {
@@ -159,15 +123,6 @@ function ctdl_save_custom_id_data($post_id)
 }
 add_action('save_post', 'ctdl_save_custom_id_data');
 
-
-// =========================================================================
-// 3. SHORTCODE LOGIC: Handlers for both static and dynamic content
-// =========================================================================
-
-/**
- * The Child Shortcode: [custom_tab]
- * Still required for backward compatibility (static mode).
- */
 function custom_tab_shortcode($atts, $content = null)
 {
     global $custom_tab_data;
@@ -177,31 +132,25 @@ function custom_tab_shortcode($atts, $content = null)
         'id' => sanitize_title($atts['title'] ?? 'tab-' . count($custom_tab_data)),
     ), $atts, 'custom_tab');
 
-    // Store the tab data
     $custom_tab_data[] = array(
         'title' => $atts['title'],
         'id' => $atts['id'],
         'content' => do_shortcode($content),
     );
 
-    return ''; // Do not output anything yet
+    return '';
 }
 add_shortcode('custom_tab', 'custom_tab_shortcode');
 
-/**
- * The Parent Shortcode: [custom_tabs]
- * Determines mode (static vs. dynamic) and generates HTML.
- */
 function custom_tabs_shortcode($atts, $content = null)
 {
     global $custom_tab_data;
 
-    // Define the attributes and merge with user input
     $atts = shortcode_atts(array(
-        'layout' => 'top', // 'top', 'left', or 'right'
-        'group' => '',    // Taxonomy slug for dynamic content
-        'title' => '',    // NEW: Header title
-        'description' => '', // NEW: Header description
+        'layout' => 'top',
+        'group' => '',
+        'title' => '',
+        'description' => '',
     ), $atts, 'custom_tabs');
 
     $layout_class = 'layout-' . sanitize_html_class($atts['layout']);
@@ -210,12 +159,11 @@ function custom_tabs_shortcode($atts, $content = null)
 
     $custom_tab_data = array();
 
-    // --- Dynamic Mode: Fetch from CPT if 'group' is specified ---
     if (!empty($atts['group'])) {
         $query_args = array(
             'post_type' => 'tab_item',
             'posts_per_page' => -1,
-            'orderby' => 'menu_order',
+            'orderby' => 'date',
             'order' => 'ASC',
             'tax_query' => array(
                 array(
@@ -232,14 +180,12 @@ function custom_tabs_shortcode($atts, $content = null)
             while ($tabs_query->have_posts()) {
                 $tabs_query->the_post();
 
-                // Get custom ID, falling back to post slug
                 $custom_id = get_post_meta(get_the_ID(), '_ctdl_custom_tab_id', true);
                 $tab_id = !empty($custom_id) ? $custom_id : get_post_field('post_name', get_the_ID());
 
                 $custom_tab_data[] = array(
                     'title' => get_the_title(),
                     'id' => $tab_id,
-                    // Get raw content for search indexing, use the_content filter for display
                     'raw_content' => get_the_content(),
                     'content' => apply_filters('the_content', get_the_content()),
                 );
@@ -248,15 +194,12 @@ function custom_tabs_shortcode($atts, $content = null)
         }
 
     } else {
-        // --- Static Mode: Parse nested shortcodes (Original behavior) ---
         do_shortcode($content);
     }
 
     if (empty($custom_tab_data)) {
-        // --- MODIFIED ERROR MESSAGE ---
         $error_message = __('No tab items found.', 'textdomain');
 
-        // Try to fetch the human-readable group title if a slug was provided
         if (!empty($group_slug)) {
             $term = get_term_by('slug', $group_slug, 'tab_group');
             if ($term && !is_wp_error($term)) {
@@ -274,12 +217,8 @@ function custom_tabs_shortcode($atts, $content = null)
     $tab_contents = '';
     $first_tab_id = $custom_tab_data[0]['id'];
 
-    // --- 4. Add Custom Header and Search Bar HTML (Render only if title or description exists) ---
     $has_header = !empty($atts['title']) || !empty($atts['description']);
     $search_placeholder = __('Search tab titles and content...', 'textdomain');
-
-    // Search input HTML is now conditional, but needed for the JS initialization in the DOM.
-    // If the header is suppressed, we still need the list to render, but the search input is omitted.
 
     if ($has_header) {
         $output .= sprintf(
@@ -290,7 +229,6 @@ function custom_tabs_shortcode($atts, $content = null)
             </div>',
             !empty($atts['title']) ? '<h1>' . esc_html($atts['title']) . '</h1>' : '',
             !empty($atts['description']) ? '<p>' . esc_html($atts['description']) . '</p>' : '',
-            // Search Bar HTML
             sprintf(
                 '<div class="custom-tabs-search-bar-wrap" data-tabs-id="%1$s-search">
                     <div class="search-inner-bar">
@@ -306,16 +244,12 @@ function custom_tabs_shortcode($atts, $content = null)
         );
     }
 
-
-    // --- 5. Build Tab Headers and Content Panels ---
     foreach ($custom_tab_data as $tab) {
         $tab_id = esc_attr($tab['id']);
         $tab_title = esc_html($tab['title']);
 
-        // Combine title and raw content for client-side search indexing
         $search_data = esc_attr($tab_title . ' ' . strip_tags($tab['raw_content']));
 
-        // Tab Headers (Navigation Links)
         $tab_headers .= sprintf(
             '<li class="tab-header-item" data-search-content="%3$s">
                 <a href="#%1$s" data-target="%1$s" class="custom-tabs-header tab-inactive">
@@ -327,7 +261,6 @@ function custom_tabs_shortcode($atts, $content = null)
             $search_data
         );
 
-        // Tab Content Panels
         $tab_contents .= sprintf(
             '<div id="%1$s" class="custom-tabs-content tab-content-panel hidden">
                 %2$s
@@ -337,7 +270,6 @@ function custom_tabs_shortcode($atts, $content = null)
         );
     }
 
-    // --- 6. Final HTML Output (Standard HTML Classes) ---
     $output .= sprintf(
         '<div class="custom-tabs-container %4$s" data-tabs-id="%1$s">
             <ul class="tab-headers-list">
@@ -351,10 +283,9 @@ function custom_tabs_shortcode($atts, $content = null)
         $tabs_group_id,
         $tab_headers,
         $tab_contents,
-        $layout_class // Inject the layout class here
+        $layout_class
     );
 
-    // --- 7. Add Styling and JavaScript (Theme Variable CSS) ---
     $output .= '
     <style>
         .custom-tabs-container { 
@@ -390,7 +321,7 @@ function custom_tabs_shortcode($atts, $content = null)
             font-size: 1.1rem;
             padding: 0 15px; 
         }
-        
+
         /* --- Search Bar Styles (Replicating Theme Design) --- */
         .custom-tabs-search-bar-wrap {
             max-width: 550px; /* Match the max-width used in the theme\'s search-container */
@@ -511,7 +442,7 @@ function custom_tabs_shortcode($atts, $content = null)
             box-shadow: var(--card-shadow);
             margin: 0; /* Remove default paragraph margin */
         }
-        
+
         /* --- Animations --- */
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
@@ -540,7 +471,7 @@ function custom_tabs_shortcode($atts, $content = null)
                 gap: 2rem;
                 align-items: flex-start;
             }
-            
+
             /* Styles common to both vertical layouts */
             .layout-left .tab-headers-list, .layout-right .tab-headers-list {
                 flex-direction: column; 
@@ -571,10 +502,9 @@ function custom_tabs_shortcode($atts, $content = null)
                 color: var(--primary-color);
             }
             .layout-left .custom-tabs-header::after, .layout-right .custom-tabs-header::after {
-                /* Assuming Font Awesome 5 Free is loaded by your theme for the chevron */
                 font-family: "Font Awesome 5 Free";
                 font-weight: 900;
-                content: "\f054"; /* Unicode for fa-chevron-right */
+                content: "\f054";
                 position: absolute;
                 right: 15px;
                 top: 50%;
@@ -586,13 +516,13 @@ function custom_tabs_shortcode($atts, $content = null)
             .layout-left .custom-tabs-header:hover, .layout-right .custom-tabs-header:hover {
                 background-color: rgba(192, 33, 38, 0.05); 
             }
-            
+
             /* --- LEFT-SPECIFIC STYLES --- */
-           
+
             .layout-left .custom-tabs-header {
                 border-right: 3px solid transparent; /* Highlight on the right side */
             }
-            
+
             .layout-left .tab-active {
                 background-color: rgba(192, 33, 38, 0.1); 
                 color: var(--primary-color) !important;
@@ -685,44 +615,31 @@ function custom_tabs_shortcode($atts, $content = null)
         }
     </style>';
 
-    // Inject JavaScript for deep linking, interaction, AND search
     $output .= '
     <script>
     document.addEventListener(\'DOMContentLoaded\', function() {
         const tabsContainer = document.querySelector(\'.custom-tabs-container[data-tabs-id="\' + \'' . esc_js($tabs_group_id) . '\' + \'"]\');
-        
-        // This check is now the only mandatory return, allowing tabs to initialize without the header/search bar.
+
         if (!tabsContainer) return; 
 
-        // Find search input (may be null if header/search bar was omitted)
         const searchInput = document.querySelector(\'.custom-tabs-search-bar-wrap[data-tabs-id="\' + \'' . esc_js($tabs_group_id) . '-search\' + \'"] .custom-tabs-search-input\');
         const noResultsMessage = tabsContainer.querySelector(\'.no-results-message\');
-        
+
         const headers = tabsContainer.querySelectorAll(\'.tab-header-item\');
         const contents = tabsContainer.querySelectorAll(\'.custom-tabs-content\');
         const firstTabId = \'' . esc_js($first_tab_id) . '\';
 
-        /**
-         * Retrieves the computed CSS property value for a given variable.
-         */
         function getCssVar(variableName) {
             return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
         }
 
-        /**
-         * Activates the specified tab ID.
-         * IMPORTANT: This now uses attribute selectors for content to reliably handle complex IDs.
-         */
         function activateTab(tabId) {
-            // Hide no results message first
             if (noResultsMessage) noResultsMessage.classList.add(\'hidden\');
 
-            // 1. Deactivate all (Headers and Contents)
             headers.forEach(h => {
                 const link = h.querySelector(\'.custom-tabs-header\');
                 link.classList.remove(\'tab-active\');
                 link.classList.add(\'tab-inactive\');
-                // Clear inline styles
                 link.style.backgroundColor = \'\'; 
                 link.style.color = \'\';
                 link.style.boxShadow = \'\';
@@ -730,29 +647,22 @@ function custom_tabs_shortcode($atts, $content = null)
                 link.style.borderRight = \'\'; 
                 link.style.borderLeft = \'\'; 
             });
-            
-            // Hide all content panels by adding the "hidden" class
+
             contents.forEach(c => c.classList.add(\'hidden\')); 
 
-            // 2. Activate target header (using data-target is safe)
             const targetHeaderLink = tabsContainer.querySelector(\'.custom-tabs-header[data-target="\' + tabId + \'"]\');
             if (targetHeaderLink) {
                 targetHeaderLink.classList.add(\'tab-active\');
                 targetHeaderLink.classList.remove(\'tab-inactive\');
-                
-                // Fetch primary color from theme variables
+
                 const primaryColor = getCssVar(\'--primary-color\') || \'#c02126\';
 
                 const isVerticalLayout = tabsContainer.classList.contains(\'layout-left\') || tabsContainer.classList.contains(\'layout-right\');
-                const isRightLayout = tabsContainer.classList.contains(\'layout-right\');
+                const isRightLayout = tabsContainer.classList.contains(\'layout_right\');
 
 
                 if (isVerticalLayout && window.innerWidth > 768) {
-                    // Vertical layout active styles (light background, border marker)
-                    
-                    // Simple, robust calculation for rgba(..., 0.1) fallback
                     const hexToRgba = (hex, alpha) => {
-                        // Handle potential short hex codes like #f00
                         if(hex.length === 4) {
                             hex = \'#\' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
                         }
@@ -768,17 +678,14 @@ function custom_tabs_shortcode($atts, $content = null)
                     targetHeaderLink.style.borderColor = \'transparent\';
 
                     if (!isRightLayout) {
-                         // Highlight bar on the right for \'left\' layout
                         targetHeaderLink.style.borderRight = \'3px solid \' + primaryColor;
                         targetHeaderLink.style.borderLeft = \'transparent\';
                     } else {
-                        // Highlight bar on the left for \'right\' layout
                         targetHeaderLink.style.borderLeft = \'3px solid \' + primaryColor;
                         targetHeaderLink.style.borderRight = \'transparent\';
                     }
 
                 } else {
-                    // Top/Mobile layout active styles (dark background)
                     targetHeaderLink.style.backgroundColor = primaryColor; 
                     targetHeaderLink.style.color = \'#ffffff\';
                     targetHeaderLink.style.boxShadow = \'0 2px 4px rgba(0, 0, 0, 0.1)\';
@@ -786,29 +693,22 @@ function custom_tabs_shortcode($atts, $content = null)
                 }
             }
 
-            // 3. Activate target content
-            // FIXED: Use attribute selector instead of direct ID selector for robustness
             const targetContent = tabsContainer.querySelector(\'.custom-tabs-content[id="\' + tabId + \'"]\');
             if (targetContent) {
                 targetContent.classList.remove(\'hidden\');
             }
         }
-        
-        /**
-         * Performs a live filter of the tab headers based on the search term.
-         */
+
         function filterTabs(searchTerm) {
             const normalizedSearch = searchTerm.toLowerCase().trim();
             let hasVisibleTabs = false;
             let firstVisibleTabId = null;
 
-            // Start by hiding all content panels
             contents.forEach(c => c.classList.add(\'hidden\'));
             if (noResultsMessage) noResultsMessage.classList.add(\'hidden\');
 
 
             headers.forEach(item => {
-                // Search is case-insensitive, so content is converted to lowercase for comparison
                 const searchContent = item.getAttribute(\'data-search-content\').toLowerCase();
                 const link = item.querySelector(\'.custom-tabs-header\');
                 const tabId = link.getAttribute(\'data-target\');
@@ -824,122 +724,96 @@ function custom_tabs_shortcode($atts, $content = null)
                 }
             });
 
-            // --- Post-Filter Logic ---
             if (hasVisibleTabs) {
-                 // If the currently active tab is hidden, switch to the first visible one.
                 const currentHashId = window.location.hash.substring(1);
                 const currentActiveItem = tabsContainer.querySelector(\'.tab-header-item a[data-target="\' + currentHashId + \'"]\');
                 const currentActiveIsHidden = currentActiveItem && currentActiveItem.closest(\'.tab-header-item\').style.display === \'none\';
-                
+
                 if (firstVisibleTabId && (!currentActiveItem || currentActiveIsHidden)) {
                     activateTab(firstVisibleTabId);
-                     // Update URL hash without causing a page jump
                     if (history.pushState) {
                         history.replaceState(null, null, \'#\' + firstVisibleTabId);
                     } else {
                         window.location.hash = firstVisibleTabId;
                     }
                 } else if (currentActiveItem) {
-                    // Re-activate current tab to clear old inline styles (necessary after filtering)
                     activateTab(currentHashId);
                 }
             } else {
-                 // If no tabs match, show the no results message
                 if (noResultsMessage) {
                     noResultsMessage.classList.remove(\'hidden\');
                 }
             }
         }
 
-
-        // --- Event Listeners ---
-        
-        // 1. Tab Click (Deep Linking)
         headers.forEach(item => {
             const header = item.querySelector(\'.custom-tabs-header\');
             header.addEventListener(\'click\', function(e) {
                 e.preventDefault();
                 const tabId = this.getAttribute(\'data-target\');
-                
-                // Update URL hash without causing a page jump
+
                 if (history.pushState) {
                     history.pushState(null, null, \'#\' + tabId);
                 } else {
                     window.location.hash = tabId;
                 }
-                
+
                 activateTab(tabId);
             });
         });
 
-        // 2. Search Input (Live Filtering) - Conditional Check Added
         if (searchInput) {
             let searchTimeout;
             searchInput.addEventListener(\'keyup\', function() {
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(() => {
                     filterTabs(this.value);
-                }, 200); // Debounce search input
+                }, 200);
             });
 
-            // Search bar should also trigger filter on paste
             searchInput.addEventListener(\'paste\', function(e) {
                 clearTimeout(searchTimeout);
-                // Wait slightly longer for paste operation to complete
                 searchTimeout = setTimeout(() => {
                     filterTabs(this.value);
                 }, 300);
             });
         }
 
-
-        // --- Initialization and Hash Management ---
-        
         let initialTabId = firstTabId;
 
-        // Check for URL Hash on load (Deep Linking)
         if (window.location.hash) {
             const hashId = window.location.hash.substring(1);
-            
-            // Check existence using the robust attribute selector
             const exists = tabsContainer.querySelector(\'.custom-tabs-content[id="\' + hashId + \'"]\');
             if (exists) {
                 initialTabId = hashId;
             }
         }
-        
-        // Check for hash changes after initial load
+
         window.addEventListener(\'hashchange\', function() {
             const hashId = window.location.hash.substring(1);
             if (hashId) {
-                // Check existence using the robust attribute selector
                 const exists = tabsContainer.querySelector(\'.custom-tabs-content[id="\' + hashId + \'"]\');
-                 if (exists) {
+                if (exists) {
                     activateTab(hashId);
                 }
             } else {
-                // If hash is cleared, go back to the first tab
                 activateTab(firstTabId);
             }
         });
 
-        // Re-run activation on resize
         let resizeTimeout;
         window.addEventListener(\'resize\', function() {
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(function() {
-                // Find the currently active hash and reactivate
                 const activeTabId = window.location.hash ? window.location.hash.substring(1) : firstTabId;
                 activateTab(activeTabId);
-            }, 100); // Debounce resize event
+            }, 100);
         });
 
-        // Activate the initial tab (either from hash or the first one)
         activateTab(initialTabId);
     });
     </script>';
 
-    // Clear global data after rendering (for safety)
     $custom_tab_data = array();
 
     return $output;
