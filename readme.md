@@ -1,4 +1,4 @@
-## Custom Tabs Deep Linker
+## CIPIT Custom Tabs
 Contributors: kevinmuchwat
 Donate link: 
 Tags: tabs, shortcode, deep linking, search, content tabs, ui
@@ -9,11 +9,11 @@ Stable tag: 2.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Custom Tabs Deep Linker adds powerful tabbed content to WordPress with deep linking (#tab-id), dynamic loading via Custom Post Types, vertical/horizontal layouts, custom IDs, and a built-in search bar.
+CIPIT Custom Tabs adds powerful tabbed content to WordPress with deep linking (#tab-id), dynamic loading via Custom Post Types, vertical/horizontal layouts, custom IDs, and a built-in search bar.
 
-### Description ==
+### Description
 
-Custom Tabs Deep Linker allows you to create dynamic, searchable tabbed content using both:
+CIPIT Custom Tabs allows you to create dynamic, searchable tabbed content using both:
 - A Custom Post Type (`tab_item`)
 - A taxonomy (`tab_group`)
 - OR static shortcodes when needed
