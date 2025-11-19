@@ -296,7 +296,7 @@ function custom_tabs_shortcode($atts, $content = null)
                     <div class="search-inner-bar">
                         <input type="text" placeholder="%2$s" class="custom-tabs-search-input">
                         <div class="search-button-area" title="Search Tabs">
-                            <i class="dashicons dashicons-search search-icon"></i>
+                            <i class="fas fa-search"></i> 
                         </div>
                     </div>
                 </div>',
