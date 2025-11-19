@@ -1,6 +1,5 @@
 ## CIPIT Custom Tabs
 Contributors: Kevin Muchwat
-Donate link: 
 Tags: tabs, shortcode, deep linking, search, content tabs, ui
 Requires at least: 5.0
 Tested up to: 6.7
