@@ -415,12 +415,15 @@ function custom_tabs_shortcode($atts, $content = null)
         }
 
         /* --- Content Panels --- */
-        .tab-contents-wrap {
-            margin-top: 25px;
+
+        .tab-contents-wrap a {
             word-wrap: break-word;
             overflow-wrap: break-word;
             word-break: break-all;
+            color: var(--primary-color);
+            text-decoration: none;
         }
+
         .tab-content-panel { 
             padding: 25px;
             border: 1px solid #e5e7eb;
