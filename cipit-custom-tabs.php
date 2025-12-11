@@ -2,13 +2,14 @@
 /**
  * Plugin Name: CIPIT Custom Tabs
  * Plugin URI: https://github.com/Muchwat/cipit-custom-tabs
- * Description: Implements a custom [custom_tabs] shortcode system with deep linking, dynamic content, layouts, search, and more.
- * Version: 1.0.0
+ * Description: Implements a custom [custom_tabs] shortcode system with deep linking, dynamic content, layouts, search, and more. (Nesting Enabled)
+ * Version: 1.1.0
  * Author: Kevin Muchwat
  * Author URI: https://github.com/Muchwat
  * Text Domain: cipit-custom-tabs
  */
 
+// MODIFIED: Initialize as an empty array to act as a stack for nested shortcodes.
 global $custom_tab_data;
 $custom_tab_data = array();
 
@@ -130,15 +131,19 @@ function custom_tab_shortcode($atts, $content = null)
 
     $atts = shortcode_atts(array(
         'title' => 'Tab',
-        'id' => sanitize_title($atts['title'] ?? 'tab-' . count($custom_tab_data)),
+        // MODIFIED: use count of the current stack item
+        'id' => sanitize_title($atts['title'] ?? 'tab-' . count(end($custom_tab_data))),
     ), $atts, 'custom_tab');
 
-    $custom_tab_data[] = array(
-        'title' => $atts['title'],
-        'id' => $atts['id'],
-        'content' => do_shortcode($content),
-    );
-
+    // MODIFIED: Push content onto the current stack item (the last element)
+    if (!empty($custom_tab_data)) {
+        $last_key = array_key_last($custom_tab_data);
+        $custom_tab_data[$last_key][] = array(
+            'title' => $atts['title'],
+            'id' => $atts['id'],
+            'content' => do_shortcode($content),
+        );
+    }
     return '';
 }
 add_shortcode('custom_tab', 'custom_tab_shortcode');
@@ -164,7 +169,10 @@ function custom_tabs_shortcode($atts, $content = null)
     $content_mode_active = filter_var($atts['content-mode'], FILTER_VALIDATE_BOOLEAN);
     $content_mode_class = $content_mode_active ? 'content-mode-active' : '';
 
-    $custom_tab_data = array();
+    // MODIFIED: Push a new, empty array onto the global stack for this instance's tabs.
+    $custom_tab_data[] = array();
+    $current_tab_data_index = array_key_last($custom_tab_data); // Get the key of the new stack item
+
 
     $default_title = '';
     $default_description = '';
@@ -211,7 +219,8 @@ function custom_tabs_shortcode($atts, $content = null)
                 $custom_id = get_post_meta(get_the_ID(), '_ctdl_custom_tab_id', true);
                 $tab_id = !empty($custom_id) ? $custom_id : get_post_field('post_name', get_the_ID());
 
-                $custom_tab_data[] = array(
+                // MODIFIED: Use the current stack item
+                $custom_tab_data[$current_tab_data_index][] = array(
                     'title' => get_the_title(),
                     'id' => $tab_id,
                     'raw_content' => get_the_content(),
@@ -222,10 +231,14 @@ function custom_tabs_shortcode($atts, $content = null)
         }
 
     } else {
+        // MODIFIED: Process nested shortcodes. The content they generate goes into the current stack item.
         do_shortcode($content);
     }
 
-    if (empty($custom_tab_data)) {
+    // MODIFIED: Get the tabs for this *specific* shortcode instance from the stack.
+    $current_tabs = $custom_tab_data[$current_tab_data_index];
+
+    if (empty($current_tabs)) {
         $error_message = __('No tab items found.', 'textdomain');
 
         if (!empty($group_slug)) {
@@ -237,13 +250,15 @@ function custom_tabs_shortcode($atts, $content = null)
             }
         }
 
+        // MODIFIED: Pop the empty array off the stack before returning the error.
+        array_pop($custom_tab_data);
         return '<p style="text-align: center; padding: 20px; border: 1px dashed #c02126; border-radius: 8px; background-color: #fef0f0; color: #c02126; max-width: 800px; margin: 2rem auto;">' . $error_message . '</p>';
     }
 
     $output = '';
     $tab_headers = '';
     $tab_contents = '';
-    $first_tab_id = $custom_tab_data[0]['id'];
+    $first_tab_id = $current_tabs[0]['id']; // MODIFIED: Use $current_tabs
 
     // Check if header should be shown based on attribute and content presence
     $has_header_content = !empty($title) || !empty($description);
@@ -274,11 +289,12 @@ function custom_tabs_shortcode($atts, $content = null)
         );
     }
 
-    foreach ($custom_tab_data as $tab) {
+    // MODIFIED: Loop through $current_tabs
+    foreach ($current_tabs as $tab) {
         $tab_id = esc_attr($tab['id']);
         $tab_title = esc_html($tab['title']);
 
-        $search_data = esc_attr($tab_title . ' ' . strip_tags($tab['raw_content']));
+        $search_data = esc_attr($tab_title . ' ' . strip_tags($tab['raw_content'] ?? '')); // Use ?? '' for array safety
 
         $tab_headers .= sprintf(
             '<li class="tab-header-item" data-search-content="%3$s">
@@ -467,13 +483,13 @@ function custom_tabs_shortcode($atts, $content = null)
             animation: fadeIn 0.4s ease-in-out; 
         }
         
-        /* NEW: Content Mode Active (Borderless/Shadowless) */
-        .content-mode-active .tab-content-panel {
+        /* Content Mode Active (Borderless/Shadowless/Paddingless) */
+        .content-mode-active .tab-content-panel,
+        .content-mode-active .custom-tabs-content {
             border: none !important;
             box-shadow: none !important;
-            background-color: transparent !important; /* Use container background if desired, or #ffffff if that\'s the goal */
-            /* If you want white background without border/shadow: 
-            background-color: #ffffff !important; */
+            background-color: transparent !important; 
+            padding: 0 !important; /* Remove padding in content mode */
         }
 
         /* --- No Results Message Styling --- */
@@ -753,233 +769,245 @@ function custom_tabs_shortcode($atts, $content = null)
     $output .= '
     <script>
     document.addEventListener(\'DOMContentLoaded\', function() {
-        const tabsContainer = document.querySelector(\'.custom-tabs-container[data-tabs-id="\' + \'' . esc_js($tabs_group_id) . '\' + \'"]\');
-
-        if (!tabsContainer) return; 
-
-        const searchInput = document.querySelector(\'.custom-tabs-search-bar-wrap[data-tabs-id="\' + \'' . esc_js($tabs_group_id) . '-search\' + \'"] .custom-tabs-search-input\');
-        const noResultsMessage = tabsContainer.querySelector(\'.no-results-message\');
-
-        const headers = tabsContainer.querySelectorAll(\'.tab-header-item\');
-        const contents = tabsContainer.querySelectorAll(\'.custom-tabs-content\');
-        const firstTabId = \'' . esc_js($first_tab_id) . '\';
-
-        function getCssVar(variableName) {
-            return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
-        }
-
-        function activateTab(tabId) {
-            if (noResultsMessage) noResultsMessage.classList.add(\'hidden\');
-
-            headers.forEach(h => {
-                const link = h.querySelector(\'.custom-tabs-header\');
-                
-                // Clear both classes for all tabs
-                link.classList.remove(\'tab-active\');
-                h.classList.remove(\'is-active\'); // Custom class for LI wrapper styling
-                
-                link.classList.add(\'tab-inactive\');
-                
-                // Reset all inline styles 
-                link.style.backgroundColor = \'\'; 
-                link.style.color = \'\';
-                link.style.boxShadow = \'\';
-                link.style.borderColor = \'\';
-                link.style.borderRight = \'\'; 
-                link.style.borderLeft = \'\'; 
-            });
-
-            contents.forEach(c => c.classList.add(\'hidden\')); 
-
-            const targetHeaderLink = tabsContainer.querySelector(\'.custom-tabs-header[data-target="\' + tabId + \'"]\');
-            if (targetHeaderLink) {
-                targetHeaderLink.classList.add(\'tab-active\');
-                targetHeaderLink.classList.remove(\'tab-inactive\');
-                
-                // Apply LI active class for button styling (layout-top) or vertical highlighting (layout-left/right)
-                const targetHeaderItem = targetHeaderLink.closest(\'.tab-header-item\');
-                if (targetHeaderItem) {
-                    targetHeaderItem.classList.add(\'is-active\');
-                }
-
-                const primaryColor = getCssVar(\'--primary-color\') || \'#c02126\';
-
-                const isVerticalLayout = tabsContainer.classList.contains(\'layout-left\') || tabsContainer.classList.contains(\'layout-right\');
-                const isRightLayout = tabsContainer.classList.contains(\'layout-right\');
+        // Use a more specific selector to find all instances, in case of nesting
+        document.querySelectorAll(\'.custom-tabs-container\').forEach(tabsContainer => {
+            const tabsGroupId = tabsContainer.getAttribute(\'data-tabs-id\');
+            
+            // Re-find elements specific to this container
+            const searchInput = document.querySelector(\'.custom-tabs-search-bar-wrap[data-tabs-id="\' + tabsGroupId + \'-search"] .custom-tabs-search-input\');
+            const noResultsMessage = tabsContainer.querySelector(\'.no-results-message\');
+            const headers = tabsContainer.querySelectorAll(\'.tab-header-item\');
+            const contents = tabsContainer.querySelectorAll(\'.custom-tabs-content\');
+            
+            // Find the ID of the first tab dynamically
+            const firstTabIdElement = tabsContainer.querySelector(\'.custom-tabs-header[data-target]\');
+            const firstTabId = firstTabIdElement ? firstTabIdElement.getAttribute(\'data-target\') : null;
 
 
-                if (isVerticalLayout && window.innerWidth > 768) {
-                    const hexToRgba = (hex, alpha) => {
-                        if(hex.length === 4) {
-                            hex = \'#\' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+            if (!firstTabId) return; // Skip if no tabs were found inside this container
+
+            function getCssVar(variableName) {
+                return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim();
+            }
+
+            function activateTab(tabId) {
+                if (noResultsMessage) noResultsMessage.classList.add(\'hidden\');
+
+                headers.forEach(h => {
+                    const link = h.querySelector(\'.custom-tabs-header\');
+                    
+                    // Clear both classes for all tabs
+                    link.classList.remove(\'tab-active\');
+                    h.classList.remove(\'is-active\'); // Custom class for LI wrapper styling
+                    
+                    link.classList.add(\'tab-inactive\');
+                    
+                    // Reset all inline styles 
+                    link.style.backgroundColor = \'\'; 
+                    link.style.color = \'\';
+                    link.style.boxShadow = \'\';
+                    link.style.borderColor = \'\';
+                    link.style.borderRight = \'\'; 
+                    link.style.borderLeft = \'\'; 
+                });
+
+                contents.forEach(c => c.classList.add(\'hidden\')); 
+
+                const targetHeaderLink = tabsContainer.querySelector(\'.custom-tabs-header[data-target="\' + tabId + \'"]\');
+                if (targetHeaderLink) {
+                    targetHeaderLink.classList.add(\'tab-active\');
+                    targetHeaderLink.classList.remove(\'tab-inactive\');
+                    
+                    // Apply LI active class for button styling (layout-top) or vertical highlighting (layout-left/right)
+                    const targetHeaderItem = targetHeaderLink.closest(\'.tab-header-item\');
+                    if (targetHeaderItem) {
+                        targetHeaderItem.classList.add(\'is-active\');
+                    }
+
+                    const primaryColor = getCssVar(\'--primary-color\') || \'#c02126\';
+
+                    const isVerticalLayout = tabsContainer.classList.contains(\'layout-left\') || tabsContainer.classList.contains(\'layout-right\');
+                    const isRightLayout = tabsContainer.classList.contains(\'layout-right\');
+
+
+                    if (isVerticalLayout && window.innerWidth > 768) {
+                        const hexToRgba = (hex, alpha) => {
+                            if(hex.length === 4) {
+                                hex = \'#\' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+                            }
+                            const r = parseInt(hex.substring(1, 3), 16);
+                            const g = parseInt(hex.substring(3, 5), 16);
+                            const b = parseInt(hex.substring(5, 7), 16);
+                            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+                        };
+
+                        // Apply vertical active styles via JS (to override CSS block and ensure correct color)
+                        targetHeaderLink.style.backgroundColor = hexToRgba(primaryColor, 0.1);
+                        targetHeaderLink.style.color = primaryColor;
+                        targetHeaderLink.style.boxShadow = \'none\';
+                        targetHeaderLink.style.borderColor = hexToRgba(primaryColor, 0.1);
+
+                        if (!isRightLayout) {
+                            targetHeaderLink.style.borderRight = \'3px solid \' + primaryColor;
+                            targetHeaderLink.style.borderLeft = \'transparent\';
+                        } else {
+                            targetHeaderLink.style.borderLeft = \'3px solid \' + primaryColor;
+                            targetHeaderLink.style.borderRight = \'transparent\';
                         }
-                        const r = parseInt(hex.substring(1, 3), 16);
-                        const g = parseInt(hex.substring(3, 5), 16);
-                        const b = parseInt(hex.substring(5, 7), 16);
-                        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-                    };
 
-                    // Apply vertical active styles via JS (to override CSS block and ensure correct color)
-                    targetHeaderLink.style.backgroundColor = hexToRgba(primaryColor, 0.1);
-                    targetHeaderLink.style.color = primaryColor;
-                    targetHeaderLink.style.boxShadow = \'none\';
-                    targetHeaderLink.style.borderColor = hexToRgba(primaryColor, 0.1);
-
-                    if (!isRightLayout) {
-                        targetHeaderLink.style.borderRight = \'3px solid \' + primaryColor;
-                        targetHeaderLink.style.borderLeft = \'transparent\';
-                    } else {
-                        targetHeaderLink.style.borderLeft = \'3px solid \' + primaryColor;
-                        targetHeaderLink.style.borderRight = \'transparent\';
+                    } else if (targetHeaderItem && targetHeaderItem.classList.contains(\'is-active\')) {
+                        // This handles active state for layout-top (Desktop & Mobile) and Mobile vertical layouts. 
+                        targetHeaderLink.style.color = \'white\';
                     }
+                }
 
-                } else if (targetHeaderItem && targetHeaderItem.classList.contains(\'is-active\')) {
-                    // This handles active state for layout-top (Desktop & Mobile) and Mobile vertical layouts. 
-                    // No inline styles needed on the link, as the LI is styled via CSS .is-active.
-                    targetHeaderLink.style.color = \'white\';
+                const targetContent = tabsContainer.querySelector(\'.custom-tabs-content[id="\' + tabId + \'"]\');
+                if (targetContent) {
+                    targetContent.classList.remove(\'hidden\');
                 }
             }
 
-            const targetContent = tabsContainer.querySelector(\'.custom-tabs-content[id="\' + tabId + \'"]\');
-            if (targetContent) {
-                targetContent.classList.remove(\'hidden\');
+            function filterTabs(searchTerm) {
+                const normalizedSearch = searchTerm.toLowerCase().trim();
+                let hasVisibleTabs = false;
+                let firstVisibleTabId = null;
+
+                // Hide all contents and no-results message before filtering
+                contents.forEach(c => c.classList.add(\'hidden\'));
+                if (noResultsMessage) noResultsMessage.classList.add(\'hidden\');
+
+                headers.forEach(item => {
+                    const searchContent = item.getAttribute(\'data-search-content\').toLowerCase();
+                    const link = item.querySelector(\'.custom-tabs-header\');
+                    const tabId = link.getAttribute(\'data-target\');
+
+                    if (normalizedSearch === \'\' || searchContent.includes(normalizedSearch)) {
+                        item.style.display = \'block\';
+                        if (!firstVisibleTabId) {
+                            firstVisibleTabId = tabId;
+                        }
+                        hasVisibleTabs = true;
+                    } else {
+                        item.style.display = \'none\';
+                    }
+                });
+
+                if (hasVisibleTabs) {
+                    const currentHashId = window.location.hash.substring(1);
+                    // Check if the currently active tab is visible after filtering
+                    const currentActiveItem = tabsContainer.querySelector(\'.tab-header-item a[data-target="\' + currentHashId + \'"]\');
+                    const currentActiveIsHidden = currentActiveItem && currentActiveItem.closest(\'.tab-header-item\').style.display === \'none\';
+
+                    if (firstVisibleTabId && (!currentActiveItem || currentActiveIsHidden)) {
+                        // Activate the first visible tab
+                        activateTab(firstVisibleTabId);
+                        // Update URL hash without creating history entry
+                        if (history.replaceState) {
+                            history.replaceState(null, null, \'#\' + firstVisibleTabId);
+                        } else {
+                            window.location.hash = firstVisibleTabId;
+                        }
+                    } else if (currentActiveItem) {
+                        // Reactivate the existing active tab if it\'s visible
+                        activateTab(currentHashId);
+                    }
+                } else {
+                    // No results found
+                    if (noResultsMessage) {
+                        noResultsMessage.classList.remove(\'hidden\');
+                    }
+                }
             }
-        }
 
-        function filterTabs(searchTerm) {
-            const normalizedSearch = searchTerm.toLowerCase().trim();
-            let hasVisibleTabs = false;
-            let firstVisibleTabId = null;
+            // --- Event Listeners ---
 
-            // Hide all contents and no-results message before filtering
-            contents.forEach(c => c.classList.add(\'hidden\'));
-            if (noResultsMessage) noResultsMessage.classList.add(\'hidden\');
-
+            // 1. Tab Click Handler
             headers.forEach(item => {
-                const searchContent = item.getAttribute(\'data-search-content\').toLowerCase();
-                const link = item.querySelector(\'.custom-tabs-header\');
-                const tabId = link.getAttribute(\'data-target\');
+                const header = item.querySelector(\'.custom-tabs-header\');
+                header.addEventListener(\'click\', function(e) {
+                    e.preventDefault();
+                    const tabId = this.getAttribute(\'data-target\');
 
-                if (normalizedSearch === \'\' || searchContent.includes(normalizedSearch)) {
-                    item.style.display = \'block\';
-                    if (!firstVisibleTabId) {
-                        firstVisibleTabId = tabId;
-                    }
-                    hasVisibleTabs = true;
-                } else {
-                    item.style.display = \'none\';
-                }
-            });
-
-            if (hasVisibleTabs) {
-                const currentHashId = window.location.hash.substring(1);
-                // Check if the currently active tab is visible after filtering
-                const currentActiveItem = tabsContainer.querySelector(\'.tab-header-item a[data-target="\' + currentHashId + \'"]\');
-                const currentActiveIsHidden = currentActiveItem && currentActiveItem.closest(\'.tab-header-item\').style.display === \'none\';
-
-                if (firstVisibleTabId && (!currentActiveItem || currentActiveIsHidden)) {
-                    // Activate the first visible tab
-                    activateTab(firstVisibleTabId);
-                    // Update URL hash without creating history entry
-                    if (history.replaceState) {
-                        history.replaceState(null, null, \'#\' + firstVisibleTabId);
+                    // Update URL hash
+                    if (history.pushState) {
+                        history.pushState(null, null, \'#\' + tabId);
                     } else {
-                        window.location.hash = firstVisibleTabId;
+                        window.location.hash = tabId;
                     }
-                } else if (currentActiveItem) {
-                    // Reactivate the existing active tab if it\'s visible
-                    activateTab(currentHashId);
-                }
-            } else {
-                // No results found
-                if (noResultsMessage) {
-                    noResultsMessage.classList.remove(\'hidden\');
-                }
+
+                    activateTab(tabId);
+                });
+            });
+
+            // 2. Search Input Handler
+            if (searchInput) {
+                let searchTimeout;
+                searchInput.addEventListener(\'keyup\', function() {
+                    clearTimeout(searchTimeout);
+                    searchTimeout = setTimeout(() => {
+                        filterTabs(this.value);
+                    }, 200);
+                });
+
+                searchInput.addEventListener(\'paste\', function(e) {
+                    clearTimeout(searchTimeout);
+                    searchTimeout = setTimeout(() => {
+                        filterTabs(this.value);
+                    }, 300);
+                });
             }
-        }
 
-        // --- Event Listeners ---
+            // 3. Initial Activation (Hash check)
+            let initialTabId = firstTabId;
 
-        // 1. Tab Click Handler
-        headers.forEach(item => {
-            const header = item.querySelector(\'.custom-tabs-header\');
-            header.addEventListener(\'click\', function(e) {
-                e.preventDefault();
-                const tabId = this.getAttribute(\'data-target\');
-
-                // Update URL hash
-                if (history.pushState) {
-                    history.pushState(null, null, \'#\' + tabId);
-                } else {
-                    window.location.hash = tabId;
-                }
-
-                activateTab(tabId);
-            });
-        });
-
-        // 2. Search Input Handler
-        if (searchInput) {
-            let searchTimeout;
-            searchInput.addEventListener(\'keyup\', function() {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    filterTabs(this.value);
-                }, 200);
-            });
-
-            searchInput.addEventListener(\'paste\', function(e) {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    filterTabs(this.value);
-                }, 300);
-            });
-        }
-
-        // 3. Initial Activation (Hash check)
-        let initialTabId = firstTabId;
-
-        if (window.location.hash) {
-            const hashId = window.location.hash.substring(1);
-            const exists = tabsContainer.querySelector(\'.custom-tabs-content[id="\' + hashId + \'"]\');
-            if (exists) {
-                initialTabId = hashId;
-            }
-        }
-
-        // 4. Hash Change Handler (for back/forward buttons)
-        window.addEventListener(\'hashchange\', function() {
-            const hashId = window.location.hash.substring(1);
-            if (hashId) {
+            if (window.location.hash) {
+                const hashId = window.location.hash.substring(1);
                 const exists = tabsContainer.querySelector(\'.custom-tabs-content[id="\' + hashId + \'"]\');
                 if (exists) {
-                    activateTab(hashId);
+                    initialTabId = hashId;
                 }
-            } else {
-                activateTab(firstTabId);
             }
-        });
+            
+            // 4. Hash Change Handler (for back/forward buttons)
+            // Note: This needs to listen globally, but the activateTab call must be specific to the container
+            // We cannot easily filter hashchange to a single container, so we activate the relevant one.
+            window.addEventListener(\'hashchange\', function() {
+                const hashId = window.location.hash.substring(1);
+                if (hashId) {
+                    const targetContent = tabsContainer.querySelector(\'.custom-tabs-content[id="\' + hashId + \'"]\');
+                    if (targetContent) {
+                         // Only activate if the element exists within this specific container
+                        activateTab(hashId);
+                    }
+                } else if (tabsContainer.querySelector(\'.tab-active\') === null) {
+                    // If hash is cleared and this container has no active tab, activate default
+                    activateTab(firstTabId);
+                }
+            });
 
-        // 5. Resize Handler (for adjusting vertical/horizontal styles)
-        let resizeTimeout;
-        window.addEventListener(\'resize\', function() {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(function() {
-                // Recalculate and apply the active state correctly based on new screen size
-                const activeTabId = tabsContainer.querySelector(\'.tab-active\') 
-                                                ? tabsContainer.querySelector(\'.tab-active\').getAttribute(\'data-target\') 
-                                                : (window.location.hash ? window.location.hash.substring(1) : firstTabId);
-                
-                activateTab(activeTabId);
-            }, 100);
-        });
+            // 5. Resize Handler (for adjusting vertical/horizontal styles)
+            // This is complex for multiple instances, use the firstTabId to ensure initial state is correct.
+            let resizeTimeout;
+            window.addEventListener(\'resize\', function() {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(function() {
+                    // Recalculate and apply the active state correctly based on new screen size
+                    const activeTabId = tabsContainer.querySelector(\'.tab-active\') 
+                                                    ? tabsContainer.querySelector(\'.tab-active\').getAttribute(\'data-target\') 
+                                                    : (window.location.hash ? window.location.hash.substring(1) : firstTabId);
+                    
+                    activateTab(activeTabId);
+                }, 100);
+            });
 
-        // Final initial activation
-        activateTab(initialTabId);
+            // Final initial activation
+            activateTab(initialTabId);
+        });
     });
     </script>';
 
-    $custom_tab_data = array();
+    // MODIFIED: Pop the current stack item after processing is complete.
+    array_pop($custom_tab_data);
 
     return $output;
 }
