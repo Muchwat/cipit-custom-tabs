@@ -864,6 +864,14 @@ function custom_tabs_shortcode($atts, $content = null)
                 const targetContent = tabsContainer.querySelector(\'.custom-tabs-content[id="\' + tabId + \'"]\');
                 if (targetContent) {
                     targetContent.classList.remove(\'hidden\');
+
+                    // Refresh Cipit Accordions if present within the activated tab content
+                    if (typeof window.CipitAccordions?.refresh === \'function\') {
+                        // Use a small delay to ensure layout is computed
+                        setTimeout(() => {
+                            window.CipitAccordions.refresh(targetContent);
+                        }, 50);
+                    }
                 }
             }
 
